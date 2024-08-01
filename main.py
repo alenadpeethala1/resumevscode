@@ -13,21 +13,21 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten, Embedding
+from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten, Embedding, Dropout
 from tensorflow.keras import Sequential
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
 import optuna
 from sklearn.metrics import accuracy_score
+from tensorflow.keras.callbacks import EarlyStopping
 
-# Load CSV file (using the path)
+# Load CSV file
 df = pd.read_csv('/u/alenad_guest/Desktop/finalres/processed_resume.csv')
 
 def load_data(file_path):
     df = pd.read_csv(file_path)
     df = df.drop_duplicates()
     df_dropped = df.dropna()
-    X = df.drop('Category', axis=1).values  # Adjust 'target' to actual target column name
+    X = df.drop('Category', axis=1).values
     y = df['Category'].values
     return X, y
 
@@ -57,8 +57,7 @@ def preprocess_text(text):
 df['processed_text'] = df['Resume_str'].astype(str).apply(preprocess_text)
 
 # Define stop words list
-stop_words = [
-    'february', 'march', 'april', 'may', 'june', 'by', 'gpa', 'well', 'as', 'that', 'for', 'on', 'or', 'summary',
+stop_words = [ 'february', 'march', 'april', 'may', 'june', 'by', 'gpa', 'well', 'as', 'that', 'for', 'on', 'or', 'summary',
     'name', 'july', 'august', 'september', 'october', 'november', 'december', 'all', 'new', 'employee', 'i', 'any',
     'employees', 'including', 'also', 'months', 'years', 'worked', 'provided', 'streamlined', 'company', 'city',
     'which', 'job', 'state', 'annual', 'him', 'it', 'made', 'the', 'from', '1990', '1991', '1992', '1993', '1994',
@@ -75,9 +74,7 @@ stop_words = [
     'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few',
     'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
     's', 't', 'can', 'will', 'just', 'don', 'should', 'now', 'needs', 'work', 'january', 'united states', 'day',
-    'tech mahindra', 'mumbai', 'maharashtra', 'bhopal', 'madhya pradesh', 'rpgv', 'delhi', 'pune', 'less', 'india private'
-]
-
+    'tech mahindra', 'mumbai', 'maharashtra', 'bhopal', 'madhya pradesh', 'rpgv', 'delhi', 'pune', 'less', 'india private']
 
 # Function to generate word cloud
 def generate_word_cloud(category, texts):
@@ -86,12 +83,12 @@ def generate_word_cloud(category, texts):
         X_tfidf = tfidf_vectorizer.fit_transform(texts)
         feature_names = tfidf_vectorizer.get_feature_names_out()
 
-        # Trying to understand the frequency of each word 
+        # Frequency of each word 
         word_freq = X_tfidf.sum(axis=0).A1
         word_freq_dict = dict(zip(feature_names, word_freq))
 
         wc = WordCloud(width=1000, height=500, max_words=50, background_color='white', stopwords=stop_words).generate_from_frequencies(
-            dict(zip(feature_names, X_tfidf.sum(axis=0).A1))
+            word_freq_dict
         )
         plt.figure(figsize=(10, 6))
         plt.imshow(wc, interpolation='bilinear')
@@ -125,7 +122,7 @@ df['padded_text'] = list(padded_sequences)
 
 # Extract padded sequences, labels
 X = np.array(padded_sequences, dtype=np.float32)
-y = df['Category']  # 'Category' is the label column
+y = df['Category']
 
 # Encode labels
 label_encoder = LabelEncoder()
@@ -136,17 +133,41 @@ y_encoded = y_encoded.reshape(-1, 1)
 one_hot_encoder = OneHotEncoder(sparse_output=False)
 y_one_hot = one_hot_encoder.fit_transform(y_encoded)
 
-# Train-test split
+# Train test split
 X_train, X_val, y_train, y_val = train_test_split(X, y_one_hot, test_size=0.2, random_state=42)
+
+# Print shapes before and after SMOTE
+print(f"Original training set shape: X_train: {X_train.shape}, y_train: {y_train.shape}")
+
+# Check class distribution before SMOTE
+y_train_classes = np.argmax(y_train, axis=1)
+unique_classes, counts_before = np.unique(y_train_classes, return_counts=True)
+print("Class distribution before SMOTE:")
+for cls, count in zip(unique_classes, counts_before):
+    print(f"Class {cls}: {count} samples")
+
+# Apply SMOTE
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+# Check class distribution after SMOTE
+y_train_resampled_classes = np.argmax(y_train_resampled, axis=1)
+unique_classes_resampled, counts_after = np.unique(y_train_resampled_classes, return_counts=True)
+print("\nClass distribution after SMOTE:")
+for cls, count in zip(unique_classes_resampled, counts_after):
+    print(f"Class {cls}: {count} samples")
+
+print(f"Resampled training set shape: X_train_resampled: {X_train_resampled.shape}, y_train_resampled: {y_train_resampled.shape}")
 
 # Define the model
 def create_model(learning_rate):
     model = Sequential()
-    model.add(Embedding(input_dim=len(tokenizer.word_index) + 1, output_dim=100, input_length=X.shape[1]))
-    model.add(Conv1D(filters=128, kernel_size=5, activation='relu'))
-    model.add(MaxPooling1D(pool_size=4))
+    model.add(Embedding(input_dim=len(tokenizer.word_index) + 1, output_dim=50, input_length=X.shape[1]))  # Reduced output_dim
+    model.add(Conv1D(filters=64, kernel_size=3, activation='relu'))  # Fewer filters
+    model.add(MaxPooling1D(pool_size=2))
     model.add(Flatten())
-    model.add(Dense(64, activation='relu'))
+    model.add(Dense(32, activation='relu'))  # Fewer units
+    model.add(Dropout(rate=0.3))  # Reduced dropout rate
     model.add(Dense(y_one_hot.shape[1], activation='softmax'))
 
     model.compile(optimizer=Adam(learning_rate=learning_rate), loss='categorical_crossentropy', metrics=['accuracy'])
@@ -154,66 +175,50 @@ def create_model(learning_rate):
 
 # Define objective function for Optuna
 def objective(trial):
-    # Suggest hyperparameters
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
-    batch_size = trial.suggest_int('batch_size', 64, 128, 256)
+    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
     num_epochs = trial.suggest_int('num_epochs', 10, 50)
     
-    # Create and train the model
     model = create_model(learning_rate)
-    
-    # Convert data to TensorFlow tensors if needed
-    X_train_tensor = tf.convert_to_tensor(X_train, dtype=tf.float32)
-    y_train_tensor = tf.convert_to_tensor(y_train, dtype=tf.float32)
-    X_val_tensor = tf.convert_to_tensor(X_val, dtype=tf.float32)
-    y_val_tensor = tf.convert_to_tensor(y_val, dtype=tf.float32)
-
-    # Training with validation
-    history = model.fit(
-        X_train_tensor, y_train_tensor, 
-        batch_size=batch_size, 
-        epochs=num_epochs, 
-        verbose=2,
-        validation_data=(X_val_tensor, y_val_tensor)
+    early_stopping = EarlyStopping(
+        monitor='val_loss',
+        patience=3,
+        restore_best_weights=True
     )
-
-    # Evaluate on validation set
-    val_loss, val_accuracy = model.evaluate(X_val_tensor, y_val_tensor, verbose=2)
     
-    # Plot training & validation accuracy
-    plt.plot(history.history['accuracy'])
-    plt.plot(history.history['val_accuracy'])
-    plt.title('Model accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.legend(['Train', 'Validation'], loc='upper left')
-    plt.show()
-
-    # Plot training & validation loss
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('Model loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Validation'], loc='upper left')
-    plt.show()
+    history = model.fit(
+        X_train_resampled, 
+        y_train_resampled, 
+        epochs=num_epochs, 
+        batch_size=batch_size, 
+        validation_data=(X_val, y_val),
+        callbacks=[early_stopping],
+        verbose=0
+    )
     
-    return val_accuracy  # Return validation accuracy for Optuna to maximize
+    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
+    return val_accuracy
 
-# Optuna optimization
+# Optimize hyperparameters with Optuna
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=50)
+study.optimize(objective, n_trials=10)
 
-# Best hyperparameters
-print("Best hyperparameters:", study.best_params)
+print("Best hyperparameters found: ", study.best_params)
 
-# Train and save the best model
-best_model = create_model(study.best_params['learning_rate'])
-best_model.fit(
-    tf.convert_to_tensor(X_train, dtype=tf.float32), 
-    tf.convert_to_tensor(y_train, dtype=tf.float32),
-    batch_size=study.best_params['batch_size'],
-    epochs=study.best_params['num_epochs'],
-    validation_data=(tf.convert_to_tensor(X_val, dtype=tf.float32), tf.convert_to_tensor(y_val, dtype=tf.float32))
-)
-best_model.save('best_resume_model.h5')
+# Retrain model with best hyperparameters
+best_params = study.best_params
+model = create_model(best_params['learning_rate'])
+history = model.fit(X_train_resampled, y_train_resampled, 
+                    epochs=10, 
+                    batch_size=best_params['batch_size'], 
+                    validation_data=(X_val, y_val))
+
+# Evaluate on validation set
+y_val_pred = model.predict(X_val)
+y_val_pred_classes = np.argmax(y_val_pred, axis=1)
+y_val_true_classes = np.argmax(y_val, axis=1)
+accuracy = accuracy_score(y_val_true_classes, y_val_pred_classes)
+print(f'Validation Accuracy: {accuracy}')
+
+# Save model
+model.save('resume_classification_model.h5')
