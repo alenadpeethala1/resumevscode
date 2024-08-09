@@ -145,7 +145,29 @@ model.compile(optimizer=optimizer,
               metrics=['accuracy'])
 
 # Train the model
-model.fit(X_train_resampled, y_train_resampled, validation_data=(X_val, y_val), epochs=30, batch_size=64, verbose=1)
+history = model.fit(X_train_resampled, y_train_resampled, validation_data=(X_val, y_val), epochs=30, batch_size=64, verbose=1)
+
+# list all data in history
+print(history.history.keys())
+
+# summarize history for accuracy
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+
+# summarize history for loss
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
 
 # Save the model
 model.save('bestresumemodel_trial86.keras')
+
