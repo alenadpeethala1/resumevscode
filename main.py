@@ -151,23 +151,29 @@ history = model.fit(X_train_resampled, y_train_resampled, validation_data=(X_val
 print(history.history.keys())
 
 # summarize history for accuracy
+import matplotlib.pyplot as plt
+
+# Plot accuracy
 plt.plot(history.history['accuracy'])
 plt.plot(history.history['val_accuracy'])
-plt.title('model accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+plt.title('Model Accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Test'], loc='upper left')
+plt.savefig('accuracy_plot.png')  # Save without specifying a path
+plt.show()  # Display the plot
+plt.close()
 
-# summarize history for loss
+# Plot loss
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
-plt.title('model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+plt.title('Model Loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Test'], loc='upper left')
+plt.savefig('loss_plot.png')  # Save without specifying a path
+plt.show()  # Display the plot
+plt.close()
 
 # Save the model
 model.save('bestresumemodel_trial86.keras')
-
